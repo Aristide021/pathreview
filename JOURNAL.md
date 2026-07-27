@@ -46,3 +46,79 @@ running. Fixed by having the `setup` target copy `.env.example` to `.env` if mis
 this branch).
 
 **Cohort ledger:** [x] Issue added to cohort ledger
+
+## Week 8 - Reproduction & solution planning
+
+**Reproduction commit link:** [pending - filled in below]
+
+**Reproduction summary:**
+I reproduced the bug two ways in my local venv. Running the snippet from the issue against
+`SkillExtractor.extract_skills()` returned `[]` for JavaScript text and `['React']` for
+TypeScript text, matching the reported behavior exactly. Running
+`pytest tests/unit/test_skill_extractor.py` gave 5 failures out of 18, including all four
+tests named in the issue.
+
+### How to reproduce
+
+```bash
+.venv/bin/python -c "
+from ingestion.parsers.skill_extractor import SkillExtractor
+e = SkillExtractor()
+print('JS  :', [d.name for d in e.extract_skills('Wrote index.js using const arrow functions and async/await callbacks')])
+print('TS  :', [d.name for d in e.extract_skills('Built app.tsx and types.ts with strict TypeScript interfaces')])
+"
+```
+
+Observed output:
+
+```
+JS  : []
+TS  : ['React']
+```
+
+Expected: `['JavaScript']` and a list containing `TypeScript`.
+
+```bash
+.venv/bin/python -m pytest tests/unit/test_skill_extractor.py -v
+```
+
+Observed: `5 failed, 13 passed`.
+
+```
+FAILED tests/unit/test_skill_extractor.py::TestSkillExtractor::test_text_with_typescript_files
+FAILED tests/unit/test_skill_extractor.py::TestSkillExtractor::test_database_technology_detection
+FAILED tests/unit/test_skill_extractor.py::TestSkillExtractor::test_devops_tool_detection
+FAILED tests/unit/test_skill_extractor.py::TestSkillExtractor::test_javascript_detection
+FAILED tests/unit/test_skill_extractor.py::TestSkillExtractor::test_docker_compose_detection
+```
+
+### What I found while tracing it
+
+All four in-scope failures come from `_detect_languages` and `_detect_tools` in
+`ingestion/parsers/skill_extractor.py`:
+
+- The `JS_TS_KEYWORDS` set on line 30 is defined but never referenced anywhere in the repo.
+  JS detection never looks at `const`, `let`, `function`, or `=>`.
+- `re.search(r"\b(import|require)\s+", text)` on line 179 requires whitespace after the
+  keyword, so `require('fs')` does not match.
+- TypeScript is only ever selected by filename (line 186). Text-only TS input can never
+  produce a TypeScript detection, and line 186 makes JS and TS mutually exclusive.
+- The TS test text gets labeled Python, because the annotation regex on line 160,
+  `:\s*(int|str|float|bool|list|dict)`, matches `: string` (`str` is a prefix of `string`).
+- `_detect_tools` substring-matches the literal word "docker". Dockerfile content
+  (`FROM`, `RUN`, `EXPOSE`) and compose YAML (`services:`, `ports:`) never contain it.
+
+The fifth failure, `test_database_technology_detection`, is a separate pre-existing bug in
+the test itself: line 138 reads `skill_names = [s.name for s in skill_names]`, which raises
+`UnboundLocalError`. It is unrelated to #148 and I plan to report it as its own issue rather
+than widen this PR.
+
+**PLAN.md link:** [pending]
+
+**Walkthrough video (recommended):** not recorded
+
+**Blockers or open questions:**
+Two judgment calls I want feedback on. First, whether TypeScript input should also report
+JavaScript, since TS is a superset. The test only asserts TypeScript is present, so either
+reading passes. Second, whether to fix the unrelated broken test at line 138 in this PR or
+file it separately. I lean toward filing it separately to keep the diff scoped to #148.
