@@ -49,7 +49,7 @@ this branch).
 
 ## Week 8 - Reproduction & solution planning
 
-**Reproduction commit link:** [pending - filled in below]
+**Reproduction commit link:** https://github.com/Aristide021/pathreview/commit/dd1b0ba565f41ba882d47f8baddd19f0391f3b8e
 
 **Reproduction summary:**
 I reproduced the bug two ways in my local venv. Running the snippet from the issue against
@@ -113,7 +113,7 @@ the test itself: line 138 reads `skill_names = [s.name for s in skill_names]`, w
 `UnboundLocalError`. It is unrelated to #148 and I plan to report it as its own issue rather
 than widen this PR.
 
-**PLAN.md link:** [pending]
+**PLAN.md link:** https://github.com/Aristide021/pathreview/blob/fix/148-detect-javascript-typescript/PLAN.md
 
 **Walkthrough video (recommended):** not recorded
 
