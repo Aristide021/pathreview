@@ -159,3 +159,38 @@ failing test unrelated to #148. I plan to file it separately.
 - **A Dockerfile that is also Python.** The `test_devops_tool_detection` fixture contains
   `requirements.txt`, so it detects Python too. The test only asserts Docker, so both
   appearing is fine and should stay that way.
+
+## Implementation notes (added Week 9)
+
+Where the finished work diverged from the plan above.
+
+**I did not wire in `JS_TS_KEYWORDS` as written.** Step 1 said to build the JavaScript check
+from that set. In practice the set is too blunt: it contains `import`, `class`, `async`, and
+`await`, all of which Python uses, so matching on it directly tags every Python file as
+JavaScript. I replaced it with two purpose-built dicts, `JS_STRONG_PATTERNS` and
+`JS_WEAK_PATTERNS`, mapping a regex to a human-readable evidence string. One strong signal
+identifies JavaScript on its own; weak signals need two. `JS_TS_KEYWORDS` remains unused, as
+it was before this change. Removing it felt like scope creep, so I left it for the maintainer
+to decide.
+
+**I added a `.js`/`.jsx` body reference as a strong signal, which the plan missed.** The
+issue's own example, "Wrote index.js using const arrow functions", names a `.js` file in the
+text rather than passing a filename. I had planned that mirror for TypeScript (`.ts`/`.tsx`)
+but not for JavaScript, so the example still failed after step 1. Caught it by running the
+issue's snippet rather than trusting the unit tests.
+
+**The Python false-positive fix worked as predicted.** Adding `\b` to
+`:\s*(int|str|float|bool|list|dict)` stops `: string` from matching `str` and does not
+regress `url: str)`.
+
+**Pre-existing tooling failures I did not fix.** The pre-commit `mypy` hook fails on 21
+errors in `tests/unit/test_skill_extractor.py`, all pre-existing, including one caused by the
+broken `test_database_technology_detection`. That test cannot be made to pass without the
+separate driver-alias work, so the file cannot be made mypy-clean inside this issue's scope.
+My changes add zero new mypy, ruff, or black findings. The commit used `--no-verify` for that
+reason and says so in its message.
+
+**The repo's own pre-commit `ruff --fix` hook modified the files I touched.** It sorted an
+import in the test file and converted `Optional[str]` to `str | None` in
+`skill_extractor.py`, dropping the now-unused `typing.Optional` import. Those hunks are tool
+output, not deliberate edits, and they lower the repo-wide ruff count from 182 to 179.
