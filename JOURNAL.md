@@ -151,7 +151,7 @@ so in the commit message rather than widening scope to fix unrelated tests.
 
 ### Check-in 2 (end of week)
 
-**PR link:** [pending - to be added when the PR is opened]
+**PR link:** https://github.com/ascherj/pathreview/pull/799
 
 **Branch:** `fix/148-detect-javascript-typescript`
 
