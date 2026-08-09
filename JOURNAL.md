@@ -185,3 +185,138 @@ Newly failing tests: none. Newly passing: the four named in the issue. The ruff 
 because the repo's own pre-commit `ruff --fix` hook reformatted the files I touched.
 
 **Draft PR feedback received from:** none yet
+
+## Week 10 - Iteration & reflection
+
+### Reviewer feedback
+
+**Feedback received:** [ ] Yes  [x] No - still awaiting review
+
+**Summary of feedback:**
+No review came in. As of the Week 10 deadline, PR #799 has zero reviews and zero comments.
+This appears to be the norm for the cohort rather than a signal about the PR: of the 13 open
+PRs against issue #148, 11 have no feedback of any kind, one has a Copilot bot comment, and
+exactly one has a human review. Repo-wide, 636 PRs are open and 1 has ever been merged.
+
+**How you responded:**
+No changes were required. I re-checked the PR for comments before writing this entry and left
+it open and ready for review.
+
+---
+
+### Reflection
+
+**What was harder than you expected?**
+
+I expected the regex work to be the hard part. It wasn't. The hard part was telling my own
+breakage apart from breakage that was already there. This repo fails its own quality gates on
+a clean checkout: `ruff check .` reports 182 errors on `main`, `mypy` reports 91, and
+`make test-unit` fails 53 tests. The first time I ran `make check` I assumed I had caused it.
+There is no way to answer "did I break this?" without capturing a baseline first, and I didn't
+capture mine until after I had already started editing, which cost me time re-deriving it.
+
+The second surprise was that the test file defining "done" was itself broken.
+`test_database_technology_detection` fails with `UnboundLocalError` because line 138 reads
+`skill_names = [s.name for s in skill_names]`, referencing the variable it is assigning. I had
+assumed the failing tests named in the issue were a trustworthy specification. Four of them
+were. A fifth in the same file was simply wrong, and deciding it was not my problem took
+longer than fixing it would have.
+
+Setup was also harder than it should have been. On a fresh clone `make setup` died at
+`alembic upgrade head` because it assumed `.env` existed and that the Postgres and Redis
+containers were already running.
+
+**What did you learn about working in a large codebase?**
+
+That reading is most of the work, and the reading is defensive. Before changing
+`_detect_languages` I grepped for `extract_skills` and `SkillExtractor` to find the blast
+radius, and learned two things I would not have guessed. The ingestion parser has no
+production callers at all, since only its test file imports it. And there is a second,
+unrelated class with the same name in `agent/tools/skill_extractor.py` that *is* wired into
+`agent/orchestrator.py`. On my own project I would have known both facts already. Here I had
+to establish them before I could safely touch anything.
+
+I also learned that dead code isn't yours to delete. `JS_TS_KEYWORDS` and `PYTHON_KEYWORDS`
+are both defined and never referenced anywhere in the repo. The obvious move is to remove or
+wire up the unused constant. The correct move was to leave it and explain why in the PR,
+because I don't know what the maintainer intends, and a drive-by deletion is how a small
+reviewable fix turns into an argument.
+
+The broader lesson is that scope is a real engineering decision rather than a formality. I
+made the same call three separate times, on the broken database test, the unused keyword sets,
+and `_detect_react` firing on `.tsx`, and each time chose to document rather than fix. That
+restraint is what kept the diff at 138 added lines in the module instead of a rewrite.
+
+**How did AI tools help - and where did they fall short?**
+
+Most useful for orientation and for mechanical work: mapping an unfamiliar codebase quickly,
+matching existing test conventions, and drafting regression tests once I had specified what
+each one needed to assert.
+
+Three places it fell short, all of which cost me something real.
+
+1. **The plan it helped me write was wrong on the central step.** `PLAN.md` step 1 said to
+   build JavaScript detection from the existing `JS_TS_KEYWORDS` set. That set contains
+   `import`, `class`, `async`, and `await`, all of which Python uses, so implementing the plan
+   as written tags every Python file as JavaScript and breaks `test_text_with_python_imports`.
+   I had to throw that step out and design separate strong and weak pattern sets instead. A
+   plausible-sounding plan is not a correct plan, and I only found out by running it.
+
+2. **Passing tests convinced me I was done when I wasn't.** After implementing the plan, the
+   four target tests passed, but the issue's own example, "Wrote index.js using const arrow
+   functions", still returned nothing, because the filename appears in the body text rather
+   than being passed as an argument. I caught it by running the snippet from the issue instead
+   of trusting the suite. The unit tests were not a complete specification of the bug.
+
+3. **It asserted tool results it had not actually run.** When drafting the PR description, the
+   `make lint` and `make typecheck` boxes were ticked based on my journal's summary rather
+   than on executed commands. I asked for both to be verified before submitting, and neither
+   passes: `ruff` exits non-zero with 179 findings and `mypy` with 91. My *change* introduces
+   no new failures, which is what the Week 9 guidance actually asks for, so the claim was
+   defensible once reworded. But "no new failures" and "passes" are different statements, and
+   only running the tools tells you which one is true. I ended up rewording both checkboxes to
+   state the before and after counts explicitly.
+
+The pattern across all three is the same. AI was reliable for things I could immediately
+verify, and unreliable for exactly the things I was tempted to take on faith.
+
+**What would you do differently if you started over?**
+
+Capture the baseline first. Before writing a line of code I would record the `make check` and
+`make test-unit` counts and commit them to the journal, so that every later "is this mine?"
+question becomes a lookup instead of an investigation.
+
+Get the toolchain working locally before starting rather than during. Because I could not run
+`ruff` and `mypy` cleanly, I committed with `--no-verify` and carried an unverified claim
+about lint and typecheck all the way into the PR description, where it had to be corrected.
+That was avoidable with thirty minutes of setup up front.
+
+Open the draft PR at the start of the week instead of the end. The instructions said to, and I
+didn't. Because I opened it late there was no window for peer feedback, and the
+"Draft PR feedback received from" field says none for a reason that was entirely within my
+control.
+
+**What are you most proud of from this module?**
+
+Two things, and they turned out to be connected.
+
+The first is the regression tests nobody asked for. The issue named four failing tests, and
+making those four pass would have satisfied the acceptance criteria. But broadening keyword
+matching is exactly the kind of change that fixes the stated case and quietly breaks the
+unstated one, so I wrote seven more aimed at the false positives: that English prose
+containing "constant" and "classic" does not register as JavaScript, that Python imports don't
+either, that TypeScript is no longer misreported as Python, and that Docker isn't
+double-counted when both named and structural evidence appear. Those tests are why I could
+tighten the Python annotation regex with confidence instead of hoping.
+
+The second is realizing how much of the work was finding problems the issue never mentioned. I
+went in assuming an issue describes one defect and you go fix that defect. In practice #148
+named the JavaScript and TypeScript gap, but getting it right meant first discovering that the
+Python annotation regex matched `: string` as `str`, that Docker detection missed Dockerfiles
+and compose files entirely because it searched for the literal word "docker", that a test in
+the same file was broken with an `UnboundLocalError`, that `_detect_react` fires on `.tsx`
+with no React present, and that `make setup` did not work on a clean clone. Some of those I
+fixed, because the issue could not be closed without them. Others I deliberately worked around
+and documented instead, and filed or flagged separately. Learning to tell those two categories
+apart, and to route around a defect rather than absorb it into my diff, did more for the
+quality of this PR than the fix itself did.
